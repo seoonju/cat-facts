@@ -34,15 +34,21 @@ const UserSchema = new Schema({
 });
 
 UserSchema.statics.encryptAccessToken = function(plainText) {
-    return crypto
-        .createCipher(keys.encryption.algorithm, keys.encryption.key)
-        .update(plainText, 'utf-8', 'hex');
+    const iv = crypto.randomBytes(16); // Generate a random IV
+    const cipher = crypto.createCipheriv(keys.encryption.algorithm, keys.encryption.key, iv);
+    let encrypted = cipher.update(plainText, 'utf-8', 'hex');
+    encrypted += cipher.final('hex');
+    return iv.toString('hex') + ':' + encrypted; // Prepend IV to the encrypted text
 };
 
 UserSchema.statics.decryptAccessToken = function(cipher) {
-    return crypto
-        .createDecipher(keys.encryption.algorithm, keys.encryption.key)
-        .update(cipher, 'hex', 'utf-8');
+    const textParts = cipher.split(':');
+    const iv = Buffer.from(textParts.shift(), 'hex');
+    const encryptedText = textParts.join(':');
+    const decipher = crypto.createDecipheriv(keys.encryption.algorithm, keys.encryption.key, iv);
+    let decrypted = decipher.update(encryptedText, 'hex', 'utf-8');
+    decrypted += decipher.final('utf-8');
+    return decrypted;
 };
 
 UserSchema.plugin(mongooseDelete, {overrideMethods: true});
