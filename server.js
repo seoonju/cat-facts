@@ -36,8 +36,16 @@ const mongoStore = new MongoStore({url: keys.database.url()});
 const sessionMiddleware = session({
     secret: keys.session.secret,
     resave: true,
-    saveUninitialized: true,
-    store: mongoStore
+    saveUninitialized: false, // Set to false to avoid creating sessions for unauthenticated users
+    store: mongoStore,
+    cookie: {
+        domain: 'yourdomain.com', // Set your domain
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+        maxAge: 24 * 60 * 60 * 1000, // 1 day expiration
+        path: '/'
+    },
+    name: 'your_custom_session_id' // Use a custom session cookie name
 });
 
 const speedLimiter = slowDown({
@@ -67,7 +75,13 @@ app.use('/', require('./app/routes'));
 if (process.env.NODE_ENV === 'production') {
     app.use(function (req, res, next) {
         if (req.headers['x-forwarded-proto'] != 'https') {
-            return res.redirect('https://' + req.headers.host + req.url);
+            const host = req.headers.host;
+            const url = req.url;
+            if (host && url) {
+                return res.redirect(`https://${host}${url}`);
+            } else {
+                return res.status(400).send('Invalid redirect');
+            }
         } else {
             return next();
         }
